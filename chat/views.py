@@ -4,4 +4,4 @@ from django.http import HttpResponse
 # Create your views here.
 
 def lobby(request) :
-     return HttpResponse("Let's chat")
+     return render(request, 'chat.html')
