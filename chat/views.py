@@ -1,7 +1,13 @@
 from django.shortcuts import render
-from django.http import HttpResponse
 
-# Create your views here.
+from .models import ChatMessage
 
-def lobby(request) :
-     return render(request, 'chat.html')
+
+def lobby(request):
+    messages = list(
+        ChatMessage.objects.order_by('-created_at', '-pk').values(
+            'message', 'created_at'
+        )[:100]
+    )
+    messages.reverse()
+    return render(request, 'chat.html', {'chat_messages': messages})
