@@ -1,54 +1,704 @@
 <!DOCTYPE html>
 <html lang="en">
     <head>
-        <title>
-            Chat
-        </title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#111014">
+        <title>After Hours — Group Chat</title>
+        <style>
+            :root {
+                color-scheme: dark;
+                font-family: "Trebuchet MS", "Segoe UI", sans-serif;
+                background: #111014;
+                color: #f5f1ff;
+                font-synthesis: none;
+                text-rendering: optimizeLegibility;
+                --muted: #9c96a8;
+                --line: rgba(255, 255, 255, .09);
+                --lime: #d3ff70;
+                --violet: #aa87ff;
+            }
 
-    </head>
-    <body>
-        <h1>Let's Chat!</h1>
+            * {
+                box-sizing: border-box;
+            }
 
-        <form id="form">
-            <input type="text" name="message"/>
-        </form>
-        <div id="message">
+            body {
+                min-height: 100vh;
+                margin: 0;
+                padding: 32px;
+                overflow: hidden;
+                background:
+                    radial-gradient(ellipse at 14% 15%, rgba(126, 84, 255, .17), transparent 34%),
+                    radial-gradient(ellipse at 83% 87%, rgba(211, 255, 112, .08), transparent 32%),
+                    #111014;
+            }
 
-        </div>
+            button, input {
+                font: inherit;
+            }
 
-        <script type="text/javascript">
-            let url = `ws://${window.location.host}/ws/socket-server/`
+            .app-shell {
+                display: grid;
+                grid-template-columns: 250px minmax(0, 1fr);
+                width: min(1240px, 100%);
+                height: min(820px, calc(100vh - 64px));
+                min-height: 480px;
+                margin: 0 auto;
+                overflow: hidden;
+                border: 1px solid var(--line);
+                border-radius: 24px;
+                background: rgba(25, 23, 30, .88);
+                box-shadow: 0 30px 100px rgba(0, 0, 0, .46), 0 0 90px rgba(121, 91, 255, .08);
+                backdrop-filter: blur(20px);
+            }
 
-            console.log(url)
+            .sidebar {
+                display: flex;
+                flex-direction: column;
+                padding: 27px 19px 20px;
+                border-right: 1px solid var(--line);
+                background: rgba(17, 16, 20, .55);
+            }
 
-            const chatSocket = new WebSocket(url)
+            .brand {
+                display: flex;
+                align-items: center;
+                gap: 11px;
+                padding: 2px 5px;
+                color: #fff;
+                font-size: 17px;
+                font-weight: 800;
+                letter-spacing: -.7px;
+            }
 
-            chatSocket.onmessage = function(e) {
-                let data = JSON.parse(e.data)
-                console.log('Data: ', data)
-                if (data.type == "chat") {
-                    let message = document.getElementById('message')
-                    message.insertAdjacentHTML("beforeend", `
-                    <div> 
-                        <p>${data.message}</p>
-                    </div>
-                    `)
+            .brand-mark {
+                display: grid;
+                width: 34px;
+                height: 34px;
+                place-items: center;
+                border-radius: 12px;
+                background: var(--lime);
+                color: #181817;
+                font-size: 18px;
+                transform: rotate(-7deg);
+            }
+
+            .section-label {
+                margin: 43px 8px 12px;
+                color: #777180;
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: 1.7px;
+            }
+
+            .room-link {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 11px 10px;
+                border: 1px solid rgba(170, 135, 255, .17);
+                border-radius: 13px;
+                background: rgba(170, 135, 255, .1);
+                color: #f2eaff;
+            }
+
+            .room-icon {
+                display: grid;
+                width: 35px;
+                height: 35px;
+                flex: 0 0 auto;
+                place-items: center;
+                border-radius: 10px;
+                background: linear-gradient(145deg, #bd94ff, #8165ed);
+                color: white;
+                font-size: 17px;
+                font-weight: 800;
+            }
+
+            .room-copy {
+                min-width: 0;
+            }
+
+            .room-name {
+                overflow: hidden;
+                font-size: 12px;
+                font-weight: 800;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            .room-meta {
+                margin-top: 4px;
+                color: #a79bbd;
+                font-size: 10px;
+            }
+
+            .sidebar-note {
+                margin-top: auto;
+                padding: 16px;
+                border: 1px solid var(--line);
+                border-radius: 15px;
+                background: linear-gradient(145deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .015));
+            }
+
+            .note-star {
+                color: var(--lime);
+                font-size: 17px;
+            }
+
+            .sidebar-note p {
+                margin: 9px 0 0;
+                color: #c4becb;
+                font-size: 12px;
+                line-height: 1.6;
+            }
+
+            .chat {
+                display: flex;
+                min-width: 0;
+                min-height: 0;
+                flex-direction: column;
+                position: relative;
+            }
+
+            .chat-header {
+                display: flex;
+                min-height: 88px;
+                align-items: center;
+                justify-content: space-between;
+                gap: 16px;
+                padding: 17px 26px;
+                border-bottom: 1px solid var(--line);
+            }
+
+            .chat-heading {
+                display: flex;
+                min-width: 0;
+                align-items: center;
+                gap: 13px;
+            }
+
+            .chat-heading .room-icon {
+                width: 43px;
+                height: 43px;
+                border-radius: 14px;
+                font-size: 20px;
+            }
+
+            h1 {
+                margin: 0;
+                font-size: 16px;
+                font-weight: 800;
+                letter-spacing: -.4px;
+            }
+
+            .subtitle {
+                margin-top: 5px;
+                color: var(--muted);
+                font-size: 11px;
+            }
+
+            .live-status {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px 11px;
+                border: 1px solid var(--line);
+                border-radius: 999px;
+                color: #c9c4d0;
+                font-size: 10px;
+                font-weight: 700;
+                white-space: nowrap;
+            }
+
+            .status-dot {
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                background: #f0b65f;
+                box-shadow: 0 0 10px currentColor;
+            }
+
+            .live-status[data-state="connected"] .status-dot {
+                background: var(--lime);
+            }
+
+            .live-status[data-state="disconnected"] .status-dot {
+                background: #ff7d94;
+            }
+
+            .messages {
+                display: flex;
+                flex: 1;
+                flex-direction: column;
+                gap: 17px;
+                overflow-y: auto;
+                min-height: 0;
+                padding: 28px clamp(18px, 5vw, 66px);
+                scrollbar-color: #484151 transparent;
+                scrollbar-width: thin;
+            }
+
+            .scroll-latest {
+                position: absolute;
+                right: clamp(18px, 5vw, 66px);
+                bottom: 91px;
+                z-index: 1;
+                display: flex;
+                min-width: 42px;
+                height: 42px;
+                align-items: center;
+                justify-content: center;
+                gap: 7px;
+                padding: 0 12px;
+                border: 1px solid rgba(211, 255, 112, .32);
+                border-radius: 999px;
+                background: #292731;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, .35);
+                color: var(--lime);
+                cursor: pointer;
+                font-size: 16px;
+                transition: transform .18s, background .18s;
+            }
+
+            .scroll-latest:hover {
+                background: #35323e;
+                transform: translateY(-2px);
+            }
+
+            .scroll-latest[hidden] {
+                display: none;
+            }
+
+            .unread-count {
+                display: grid;
+                min-width: 19px;
+                height: 19px;
+                place-items: center;
+                border-radius: 999px;
+                background: var(--lime);
+                color: #171916;
+                font-size: 10px;
+                font-weight: 900;
+            }
+
+            .welcome-card {
+                max-width: 420px;
+                margin: auto;
+                padding: 24px;
+                border: 1px solid rgba(211, 255, 112, .17);
+                border-radius: 19px 19px 19px 5px;
+                background:
+                    radial-gradient(ellipse at 100% 0%, rgba(211, 255, 112, .09), transparent 55%),
+                    #201e25;
+                animation: pop-in .35s ease-out both;
+            }
+
+            .welcome-eyebrow {
+                color: var(--lime);
+                font-size: 10px;
+                font-weight: 900;
+                letter-spacing: 1.8px;
+                text-transform: uppercase;
+            }
+
+            .welcome-card h2 {
+                margin: 13px 0 8px;
+                font-size: clamp(24px, 4vw, 34px);
+                letter-spacing: -1.6px;
+            }
+
+            .welcome-card p {
+                margin: 0;
+                color: #aaa4b1;
+                font-size: 13px;
+                line-height: 1.7;
+            }
+
+            .message-row {
+                display: flex;
+                width: fit-content;
+                max-width: min(80%, 540px);
+                align-items: flex-end;
+                gap: 9px;
+                animation: pop-in .22s ease-out both;
+            }
+
+            .message-row:nth-child(3n + 1) .message-avatar {
+                background: #bc8eff;
+            }
+
+            .message-row:nth-child(3n + 2) .message-avatar {
+                background: #ff8ea9;
+            }
+
+            .message-row:nth-child(3n) .message-avatar {
+                background: #7acabb;
+            }
+
+            .message-avatar {
+                display: grid;
+                width: 27px;
+                height: 27px;
+                flex: 0 0 auto;
+                place-items: center;
+                border-radius: 10px;
+                color: #19171d;
+                font-size: 10px;
+                font-weight: 900;
+            }
+
+            .message-bubble {
+                padding: 11px 14px;
+                border: 1px solid var(--line);
+                border-radius: 15px 15px 15px 5px;
+                background: #24212a;
+                color: #f3eff8;
+                font-size: 13px;
+                line-height: 1.55;
+                overflow-wrap: anywhere;
+                white-space: pre-wrap;
+            }
+
+            .message-time {
+                margin: 0 0 4px;
+                color: #88818f;
+                font-size: 9px;
+                white-space: nowrap;
+            }
+
+            .composer-wrap {
+                padding: 0 clamp(18px, 5vw, 66px) 24px;
+            }
+
+            .composer {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 8px 9px 8px 18px;
+                border: 1px solid rgba(255, 255, 255, .12);
+                border-radius: 17px;
+                background: #201e25;
+                box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
+                transition: border-color .2s, box-shadow .2s;
+            }
+
+            .composer:focus-within {
+                border-color: rgba(211, 255, 112, .5);
+                box-shadow: 0 0 0 3px rgba(211, 255, 112, .07);
+            }
+
+            .composer input {
+                width: 100%;
+                min-width: 0;
+                padding: 9px 0;
+                border: 0;
+                outline: 0;
+                background: transparent;
+                color: #f7f4fb;
+                font-size: 13px;
+            }
+
+            .composer input::placeholder {
+                color: #817b89;
+            }
+
+            .send-button {
+                display: grid;
+                width: 42px;
+                height: 42px;
+                flex: 0 0 auto;
+                place-items: center;
+                border: 0;
+                border-radius: 13px;
+                background: var(--lime);
+                color: #171916;
+                cursor: pointer;
+                font-size: 18px;
+                transition: transform .18s, background .18s;
+            }
+
+            .send-button:hover:not(:disabled) {
+                background: #e0ff9d;
+                transform: translateY(-2px) rotate(-5deg);
+            }
+
+            .send-button:disabled {
+                cursor: not-allowed;
+                opacity: .42;
+            }
+
+            .composer-hint {
+                margin: 10px 4px 0;
+                color: #77717f;
+                font-size: 10px;
+                text-align: center;
+            }
+
+            @keyframes pop-in {
+                from { opacity: 0; transform: translateY(7px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+
+            @media (max-width: 700px) {
+                body {
+                    padding: 12px;
+                }
+
+                .app-shell {
+                    grid-template-columns: 1fr;
+                    height: calc(100vh - 24px);
+                    min-height: 420px;
+                    border-radius: 19px;
+                }
+
+                .sidebar {
+                    display: none;
+                }
+
+                .chat-header {
+                    min-height: 76px;
+                    padding: 13px 17px;
+                }
+
+                .chat-heading .room-icon {
+                    width: 39px;
+                    height: 39px;
+                }
+
+                .messages {
+                    padding: 20px 17px;
+                }
+
+                .scroll-latest {
+                    right: 17px;
+                    bottom: 76px;
+                }
+
+                .composer-wrap {
+                    padding: 0 14px 14px;
                 }
             }
 
-            let form = document.getElementById('form')
+            @media (max-width: 390px) {
+                .live-status {
+                    padding: 7px 9px;
+                    font-size: 9px;
+                }
 
-            form.addEventListener('submit', (e) => {
-                e.preventDefault()
-                let message = e.target.message.value
-                chatSocket.send(JSON.stringify({
-                    'message':message
-                }))
-                form.reset()
-                
-            })
-            
-            
+                .chat-header {
+                    gap: 8px;
+                }
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+                *, *::before, *::after {
+                    animation-duration: .01ms !important;
+                    animation-iteration-count: 1 !important;
+                    scroll-behavior: auto !important;
+                    transition-duration: .01ms !important;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <main class="app-shell">
+            <aside class="sidebar" aria-label="Chat navigation">
+                <div class="brand">
+                    <span class="brand-mark" aria-hidden="true">✳</span>
+                    <span>sidequest<span style="color: var(--lime)">.</span></span>
+                </div>
+
+                <p class="section-label">YOUR SPACE</p>
+                <div class="room-link" aria-current="page">
+                    <span class="room-icon" aria-hidden="true">✳</span>
+                    <span class="room-copy">
+                        <span class="room-name">After Hours</span>
+                        <span class="room-meta">the group chat</span>
+                    </span>
+                </div>
+
+                <div class="sidebar-note">
+                    <span class="note-star" aria-hidden="true">✦</span>
+                    <p>Good people, weird hours, excellent conversations.</p>
+                </div>
+            </aside>
+
+            <section class="chat" aria-label="After Hours group chat">
+                <header class="chat-header">
+                    <div class="chat-heading">
+                        <span class="room-icon" aria-hidden="true">✳</span>
+                        <div>
+                            <h1>After Hours</h1>
+                            <div class="subtitle">a little corner of the internet</div>
+                        </div>
+                    </div>
+                    <div class="live-status" id="connection-status" data-state="connecting" role="status" aria-live="polite">
+                        <span class="status-dot" aria-hidden="true"></span>
+                        <span id="connection-label">Connecting</span>
+                    </div>
+                </header>
+
+                <div class="messages" id="messages" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
+                    <div class="welcome-card" id="welcome-card">
+                        <div class="welcome-eyebrow">✦ welcome to the chat</div>
+                        <h2>Your people are here.</h2>
+                        <p>Drop a thought, share a moment, or just say hey. The best conversations start somewhere.</p>
+                    </div>
+                </div>
+                <button class="scroll-latest" id="scroll-latest" type="button" aria-label="Jump to latest messages" title="Jump to latest messages" hidden>
+                    <span aria-hidden="true">↓</span>
+                    <span class="unread-count" id="unread-count" hidden></span>
+                </button>
+
+                <div class="composer-wrap">
+                    <form class="composer" id="form">
+                        <input type="text" name="message" placeholder="Send a little something..." aria-label="Write a message" autocomplete="off" maxlength="2000" required disabled>
+                        <button class="send-button" type="submit" aria-label="Send message" title="Send message" disabled>↗</button>
+                    </form>
+                    <p class="composer-hint">hit enter to send <span aria-hidden="true">·</span> keep it kind ✦</p>
+                </div>
+            </section>
+        </main>
+
+        {{ chat_messages|json_script:"chat-history" }}
+        <script>
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const chatSocket = new WebSocket(`${protocol}//${window.location.host}/ws/socket-server/`);
+            const form = document.getElementById('form');
+            const messageInput = form.elements.message;
+            const sendButton = form.querySelector('button');
+            const messages = document.getElementById('messages');
+            const welcomeCard = document.getElementById('welcome-card');
+            const connectionStatus = document.getElementById('connection-status');
+            const connectionLabel = document.getElementById('connection-label');
+            const scrollLatestButton = document.getElementById('scroll-latest');
+            const unreadCount = document.getElementById('unread-count');
+            const avatarColors = ['#d3ff70', '#aa87ff', '#ff8ea9', '#7acabb'];
+            let messageCount = 0;
+            let unreadMessages = 0;
+
+            function isNearBottom() {
+                return messages.scrollHeight - messages.scrollTop - messages.clientHeight < 80;
+            }
+
+            function updateScrollButton() {
+                const nearBottom = isNearBottom();
+                scrollLatestButton.hidden = nearBottom && unreadMessages === 0;
+                unreadCount.hidden = unreadMessages === 0;
+                unreadCount.textContent = unreadMessages > 99 ? '99+' : String(unreadMessages);
+                scrollLatestButton.setAttribute(
+                    'aria-label',
+                    unreadMessages > 0
+                        ? `Jump to latest messages, ${unreadMessages} unread`
+                        : 'Jump to latest messages'
+                );
+
+                if (nearBottom) {
+                    unreadMessages = 0;
+                    unreadCount.hidden = true;
+                    scrollLatestButton.hidden = true;
+                    scrollLatestButton.setAttribute('aria-label', 'Jump to latest messages');
+                }
+            }
+
+            function scrollToLatest(behavior = 'smooth') {
+                messages.scrollTo({ top: messages.scrollHeight, behavior });
+                unreadMessages = 0;
+                unreadCount.hidden = true;
+                scrollLatestButton.hidden = true;
+                scrollLatestButton.setAttribute('aria-label', 'Jump to latest messages');
+            }
+
+            function appendMessage(message, createdAt) {
+                welcomeCard.remove();
+
+                const row = document.createElement('div');
+                row.className = 'message-row';
+
+                const avatar = document.createElement('span');
+                avatar.className = 'message-avatar';
+                avatar.style.backgroundColor = avatarColors[messageCount % avatarColors.length];
+                avatar.setAttribute('aria-hidden', 'true');
+                avatar.textContent = '✦';
+
+                const bubble = document.createElement('div');
+                bubble.className = 'message-bubble';
+                bubble.textContent = message;
+
+                const timestamp = new Date(createdAt);
+                const time = document.createElement('time');
+                time.className = 'message-time';
+                time.dateTime = timestamp.toISOString();
+                time.textContent = new Intl.DateTimeFormat(undefined, {
+                    hour: 'numeric',
+                    minute: '2-digit'
+                }).format(timestamp);
+
+                row.append(avatar, bubble, time);
+                messages.append(row);
+                messageCount += 1;
+            }
+
+            const chatHistory = JSON.parse(document.getElementById('chat-history').textContent);
+            chatHistory.forEach(({ message, created_at }) => appendMessage(message, created_at));
+            if (chatHistory.length > 0) {
+                scrollToLatest('auto');
+            }
+
+            messages.addEventListener('scroll', updateScrollButton);
+            scrollLatestButton.addEventListener('click', () => scrollToLatest());
+
+            function setConnectionState(state, label) {
+                connectionStatus.dataset.state = state;
+                connectionLabel.textContent = label;
+                const isConnected = state === 'connected';
+                messageInput.disabled = !isConnected;
+                sendButton.disabled = !isConnected;
+            }
+
+            chatSocket.addEventListener('open', () => {
+                setConnectionState('connected', 'paws live');
+                messageInput.focus();
+            });
+
+            chatSocket.addEventListener('close', () => {
+                setConnectionState('disconnected', 'Disconnected');
+            });
+
+            chatSocket.addEventListener('error', () => {
+                setConnectionState('disconnected', 'Connection issue');
+            });
+
+            chatSocket.addEventListener('message', (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type !== 'chat') {
+                    return;
+                }
+
+                const wasNearBottom = isNearBottom();
+                appendMessage(data.message, data.created_at);
+                if (wasNearBottom) {
+                    scrollToLatest('smooth');
+                } else {
+                    unreadMessages += 1;
+                    updateScrollButton();
+                }
+            });
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const message = messageInput.value.trim();
+                if (!message || chatSocket.readyState !== WebSocket.OPEN) {
+                    return;
+                }
+
+                chatSocket.send(JSON.stringify({ message }));
+                scrollToLatest();
+                form.reset();
+                messageInput.focus();
+            });
         </script>
     </body>
 </html>

@@ -1,0 +1,5 @@
+Django>=6.1,<6.2
+channels>=4.3,<5
+daphne>=4.2,<5
+dj-database-url>=3,<4
+psycopg[binary]>=3.2,<4
