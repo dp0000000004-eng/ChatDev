@@ -29,7 +29,15 @@ SECRET_KEY = os.environ.get('SECRET_KEY')
 DEBUG = False
 
 ALLOWED_HOSTS = [
-    os.environ.get('ALLOWED_HOSTS'), '127.0.0.1',
+    host.strip()
+    for host in os.environ.get('ALLOWED_HOSTS', '').split(',')
+    if host.strip()
+]
+ALLOWED_HOSTS += ['chatdev-pthy.onrender.com', '127.0.0.1', 'localhost']
+CSRF_TRUSTED_ORIGINS = [
+    f'https://{host}'
+    for host in ALLOWED_HOSTS
+    if host not in {'127.0.0.1', 'localhost'}
 ]
 
 
