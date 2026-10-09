@@ -199,6 +199,15 @@
                 font-size: 11px;
             }
 
+            .subtitle a {
+                color: var(--lime);
+                text-decoration: none;
+            }
+
+            .subtitle a:hover {
+                text-decoration: underline;
+            }
+
             .live-status {
                 display: inline-flex;
                 align-items: center;
@@ -359,6 +368,15 @@
                 line-height: 1.55;
                 overflow-wrap: anywhere;
                 white-space: pre-wrap;
+            }
+
+            .message-author {
+                display: block;
+                margin-bottom: 4px;
+                color: var(--violet);
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: .15px;
             }
 
             .message-time {
@@ -531,7 +549,7 @@
                         <span class="room-icon" aria-hidden="true">✳</span>
                         <div>
                             <h1>After Hours</h1>
-                            <div class="subtitle">a little corner of the internet</div>
+                            <div class="subtitle">a little corner of the internet · <a href="{% url 'ask' %}">change name</a></div>
                         </div>
                     </div>
                     <div class="live-status" id="connection-status" data-state="connecting" role="status" aria-live="polite">
@@ -620,7 +638,7 @@
                 scrollLatestButton.setAttribute('aria-label', 'Jump to latest messages');
             }
 
-            function appendMessage(message, createdAt, id) {
+            function appendMessage(message, createdAt, id, nickname = 'Guest') {
                 if (knownMessageIds.has(id)) {
                     return false;
                 }
@@ -633,13 +651,23 @@
 
                 const avatar = document.createElement('span');
                 avatar.className = 'message-avatar';
-                avatar.style.backgroundColor = avatarColors[messageCount % avatarColors.length];
+                const authorName = nickname || 'Guest';
+                let authorHash = 0;
+                for (const character of authorName) {
+                    authorHash = (authorHash * 31 + character.charCodeAt(0)) | 0;
+                }
+                const authorColor = avatarColors[Math.abs(authorHash) % avatarColors.length];
+                avatar.style.backgroundColor = authorColor;
                 avatar.setAttribute('aria-hidden', 'true');
-                avatar.textContent = '✦';
+                avatar.textContent = authorName.charAt(0).toUpperCase();
 
                 const bubble = document.createElement('div');
                 bubble.className = 'message-bubble';
-                bubble.textContent = message;
+                const author = document.createElement('span');
+                author.className = 'message-author';
+                author.style.color = authorColor;
+                author.textContent = authorName;
+                bubble.append(author, document.createTextNode(message));
 
                 const timestamp = new Date(createdAt);
                 const time = document.createElement('time');
@@ -657,7 +685,9 @@
             }
 
             const chatHistory = JSON.parse(document.getElementById('chat-history').textContent);
-            chatHistory.forEach(({ id, message, created_at }) => appendMessage(message, created_at, id));
+            chatHistory.forEach(({ id, message, created_at, nickname }) => {
+                appendMessage(message, created_at, id, nickname);
+            });
             if (chatHistory.length > 0) {
                 scrollToLatest('auto');
             }
@@ -757,8 +787,8 @@
                     }
                     if (data.type === 'history') {
                         const wasNearBottom = isNearBottom();
-                        data.messages.forEach(({ id, message, created_at }) => {
-                            appendMessage(message, created_at, id);
+                        data.messages.forEach(({ id, message, created_at, nickname }) => {
+                            appendMessage(message, created_at, id, nickname);
                         });
                         if (wasNearBottom) {
                             scrollToLatest('auto');
@@ -772,7 +802,12 @@
                     }
 
                     const wasNearBottom = isNearBottom();
-                    const wasAdded = appendMessage(data.message, data.created_at, data.id);
+                    const wasAdded = appendMessage(
+                        data.message,
+                        data.created_at,
+                        data.id,
+                        data.nickname
+                    );
                     if (!wasAdded) {
                         return;
                     }
