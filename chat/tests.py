@@ -2,6 +2,7 @@ from asgiref.sync import async_to_sync
 from channels.testing import WebsocketCommunicator
 from django.test import TransactionTestCase
 
+from DevChat.asgi import application
 from .consumers import ChatConsumer
 from .models import ChatMessage, Nickname
 
@@ -107,6 +108,34 @@ class ChatMessagePersistenceTests(TransactionTestCase):
 
 
 class NicknameFlowTests(TransactionTestCase):
+    def test_render_origin_is_allowed_and_untrusted_origin_is_rejected(self):
+        async def check_origins():
+            trusted = WebsocketCommunicator(
+                application,
+                '/ws/socket-server/',
+                headers=[(b'origin', b'https://chatdev-pthy.onrender.com')],
+            )
+            trusted_connected, _ = await trusted.connect()
+            if trusted_connected:
+                await trusted.receive_json_from()
+                await trusted.disconnect()
+
+            untrusted = WebsocketCommunicator(
+                application,
+                '/ws/socket-server/',
+                headers=[(b'origin', b'https://untrusted.example')],
+            )
+            untrusted_connected, _ = await untrusted.connect()
+            if untrusted_connected:
+                await untrusted.disconnect()
+
+            return trusted_connected, untrusted_connected
+
+        trusted_connected, untrusted_connected = async_to_sync(check_origins)()
+
+        self.assertTrue(trusted_connected)
+        self.assertFalse(untrusted_connected)
+
     def test_home_page_asks_for_an_optional_nickname(self):
         response = self.client.get('/')
 
