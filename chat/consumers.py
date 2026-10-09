@@ -3,7 +3,7 @@ import json
 from asgiref.sync import async_to_sync
 from channels.generic.websocket import WebsocketConsumer
 
-from .models import ChatMessage
+from .models import ChatMessage, Nickname
 
 
 class ChatConsumer(WebsocketConsumer):
@@ -16,7 +16,7 @@ class ChatConsumer(WebsocketConsumer):
         self.accept()
         messages = list(
             ChatMessage.objects.order_by('-created_at', '-pk').values(
-                'id', 'message', 'created_at'
+                'id', 'message', 'created_at', 'name__nickname'
             )[:100]
         )
         messages.reverse()
@@ -24,7 +24,9 @@ class ChatConsumer(WebsocketConsumer):
             'type': 'history',
             'messages': [
                 {
-                    **message,
+                    'id': message['id'],
+                    'message': message['message'],
+                    'nickname': message['name__nickname'] or 'Guest',
                     'created_at': message['created_at'].isoformat(),
                 }
                 for message in messages
@@ -50,13 +52,16 @@ class ChatConsumer(WebsocketConsumer):
             self.close(code=1009)
             return
 
-        chat_message = ChatMessage.objects.create(message=message)
+        nickname_id = self.scope['session'].get('nickname_id')
+        nickname = Nickname.objects.filter(pk=nickname_id).first() if nickname_id else None
+        chat_message = ChatMessage.objects.create(message=message, name=nickname)
         async_to_sync(self.channel_layer.group_send)(
             self.room_group_name,
             {
                 'type': 'chat_message',
                 'id': chat_message.pk,
                 'message': chat_message.message,
+                'nickname': nickname.nickname if nickname else 'Guest',
                 'created_at': chat_message.created_at.isoformat(),
             }
         )
@@ -66,5 +71,6 @@ class ChatConsumer(WebsocketConsumer):
             'type': 'chat',
             'id': event['id'],
             'message': event['message'],
+            'nickname': event['nickname'],
             'created_at': event['created_at'],
         }))
