@@ -6,7 +6,7 @@ from .models import ChatMessage
 def lobby(request):
     messages = list(
         ChatMessage.objects.order_by('-created_at', '-pk').values(
-            'message', 'created_at'
+            'id', 'message', 'created_at'
         )[:100]
     )
     messages.reverse()

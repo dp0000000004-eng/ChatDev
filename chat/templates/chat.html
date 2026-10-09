@@ -565,7 +565,7 @@
         {{ chat_messages|json_script:"chat-history" }}
         <script>
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const chatSocket = new WebSocket(`${protocol}//${window.location.host}/ws/socket-server/`);
+            const chatSocketUrl = `${protocol}//${window.location.host}/ws/socket-server/`;
             const form = document.getElementById('form');
             const messageInput = form.elements.message;
             const sendButton = form.querySelector('button');
@@ -576,8 +576,17 @@
             const scrollLatestButton = document.getElementById('scroll-latest');
             const unreadCount = document.getElementById('unread-count');
             const avatarColors = ['#d3ff70', '#aa87ff', '#ff8ea9', '#7acabb'];
+            const reconnectDelayMax = 30000;
+            const heartbeatInterval = 25000;
+            const heartbeatTimeout = 10000;
+            let chatSocket;
+            let reconnectTimer;
+            let heartbeatTimer;
+            let heartbeatTimeoutTimer;
+            let reconnectAttempts = 0;
             let messageCount = 0;
             let unreadMessages = 0;
+            const knownMessageIds = new Set();
 
             function isNearBottom() {
                 return messages.scrollHeight - messages.scrollTop - messages.clientHeight < 80;
@@ -611,11 +620,16 @@
                 scrollLatestButton.setAttribute('aria-label', 'Jump to latest messages');
             }
 
-            function appendMessage(message, createdAt) {
+            function appendMessage(message, createdAt, id) {
+                if (knownMessageIds.has(id)) {
+                    return false;
+                }
+                knownMessageIds.add(id);
                 welcomeCard.remove();
 
                 const row = document.createElement('div');
                 row.className = 'message-row';
+                row.dataset.messageId = id;
 
                 const avatar = document.createElement('span');
                 avatar.className = 'message-avatar';
@@ -639,10 +653,11 @@
                 row.append(avatar, bubble, time);
                 messages.append(row);
                 messageCount += 1;
+                return true;
             }
 
             const chatHistory = JSON.parse(document.getElementById('chat-history').textContent);
-            chatHistory.forEach(({ message, created_at }) => appendMessage(message, created_at));
+            chatHistory.forEach(({ id, message, created_at }) => appendMessage(message, created_at, id));
             if (chatHistory.length > 0) {
                 scrollToLatest('auto');
             }
@@ -658,34 +673,133 @@
                 sendButton.disabled = !isConnected;
             }
 
-            chatSocket.addEventListener('open', () => {
-                setConnectionState('connected', 'paws live');
-                messageInput.focus();
-            });
+            function clearHeartbeat() {
+                window.clearInterval(heartbeatTimer);
+                window.clearTimeout(heartbeatTimeoutTimer);
+                heartbeatTimer = undefined;
+                heartbeatTimeoutTimer = undefined;
+            }
 
-            chatSocket.addEventListener('close', () => {
-                setConnectionState('disconnected', 'Disconnected');
-            });
-
-            chatSocket.addEventListener('error', () => {
-                setConnectionState('disconnected', 'Connection issue');
-            });
-
-            chatSocket.addEventListener('message', (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type !== 'chat') {
+            function sendHeartbeat() {
+                if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
                     return;
                 }
 
-                const wasNearBottom = isNearBottom();
-                appendMessage(data.message, data.created_at);
-                if (wasNearBottom) {
-                    scrollToLatest('smooth');
-                } else {
-                    unreadMessages += 1;
-                    updateScrollButton();
+                window.clearTimeout(heartbeatTimeoutTimer);
+                chatSocket.send(JSON.stringify({ type: 'ping' }));
+                heartbeatTimeoutTimer = window.setTimeout(() => {
+                    if (chatSocket.readyState === WebSocket.OPEN) {
+                        chatSocket.close();
+                    }
+                }, heartbeatTimeout);
+            }
+
+            function scheduleReconnect(immediate = false) {
+                if (
+                    reconnectTimer
+                    || document.visibilityState === 'hidden'
+                    || (chatSocket && (
+                        chatSocket.readyState === WebSocket.CONNECTING
+                        || chatSocket.readyState === WebSocket.OPEN
+                    ))
+                ) {
+                    return;
                 }
+
+                const delay = immediate
+                    ? 0
+                    : Math.min(1000 * (2 ** reconnectAttempts), reconnectDelayMax)
+                        * (0.8 + Math.random() * 0.4);
+                reconnectAttempts += 1;
+                setConnectionState('connecting', 'Reconnecting...');
+                reconnectTimer = window.setTimeout(() => {
+                    reconnectTimer = undefined;
+                    connect();
+                }, delay);
+            }
+
+            function connect() {
+                if (chatSocket && (
+                    chatSocket.readyState === WebSocket.CONNECTING
+                    || chatSocket.readyState === WebSocket.OPEN
+                )) {
+                    return;
+                }
+
+                setConnectionState('connecting', 'Connecting...');
+                chatSocket = new WebSocket(chatSocketUrl);
+
+                chatSocket.addEventListener('open', () => {
+                    reconnectAttempts = 0;
+                    setConnectionState('connected', 'Live now');
+                    heartbeatTimer = window.setInterval(sendHeartbeat, heartbeatInterval);
+                    if (messageInput.value === '') {
+                        messageInput.focus();
+                    }
+                });
+
+                chatSocket.addEventListener('close', () => {
+                    clearHeartbeat();
+                    setConnectionState('disconnected', 'Reconnecting...');
+                    scheduleReconnect();
+                });
+
+                chatSocket.addEventListener('error', () => {
+                    setConnectionState('disconnected', 'Connection issue');
+                });
+
+                chatSocket.addEventListener('message', (event) => {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'pong') {
+                        window.clearTimeout(heartbeatTimeoutTimer);
+                        heartbeatTimeoutTimer = undefined;
+                        return;
+                    }
+                    if (data.type === 'history') {
+                        const wasNearBottom = isNearBottom();
+                        data.messages.forEach(({ id, message, created_at }) => {
+                            appendMessage(message, created_at, id);
+                        });
+                        if (wasNearBottom) {
+                            scrollToLatest('auto');
+                        } else {
+                            updateScrollButton();
+                        }
+                        return;
+                    }
+                    if (data.type !== 'chat') {
+                        return;
+                    }
+
+                    const wasNearBottom = isNearBottom();
+                    const wasAdded = appendMessage(data.message, data.created_at, data.id);
+                    if (!wasAdded) {
+                        return;
+                    }
+                    if (wasNearBottom) {
+                        scrollToLatest('smooth');
+                    } else {
+                        unreadMessages += 1;
+                        updateScrollButton();
+                    }
+                });
+            }
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState !== 'visible') {
+                    return;
+                }
+
+                if (!chatSocket || chatSocket.readyState !== WebSocket.OPEN) {
+                    scheduleReconnect(true);
+                    return;
+                }
+
+                sendHeartbeat();
             });
+
+            window.addEventListener('online', () => scheduleReconnect(true));
+            connect();
 
             form.addEventListener('submit', (event) => {
                 event.preventDefault();
